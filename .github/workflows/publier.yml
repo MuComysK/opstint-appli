@@ -1,0 +1,28 @@
+# Publie une version d'OpStint : la branche « publication » porte l'installateur en morceaux (moins de
+# 100 Mo chacun) et sa fiche version.json ; ce travail les rassemble et crée la release, que les applis
+# des joueurs trouvent toutes seules (releases/latest/download/version.json).
+name: Publier une version
+on:
+  push:
+    branches: [publication]
+permissions:
+  contents: write
+jobs:
+  publier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rassembler l'installateur
+        run: |
+          cat paquet/OpStint-Setup.exe.part* > OpStint-Setup.exe
+          V=$(jq -r .version paquet/version.json)
+          echo "V=$V" >> "$GITHUB_ENV"
+          echo "NOM=$(jq -r '.nom // .version' paquet/version.json)" >> "$GITHUB_ENV"
+          test "$(stat -c %s OpStint-Setup.exe)" = "$(jq -r .size paquet/version.json)"
+          test "$(openssl dgst -sha512 -binary OpStint-Setup.exe | base64 -w0)" = "$(jq -r .sha512 paquet/version.json)"
+      - name: Créer la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$V" OpStint-Setup.exe paquet/version.json --target main --title "OpStint $NOM" \
+            --notes "Version $NOM d'OpStint. Les applis installées la proposent toutes seules ; sinon, télécharger OpStint-Setup.exe."
